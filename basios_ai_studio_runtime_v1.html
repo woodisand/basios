@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Basios AI Studio</title>
+    <style>
+        /* --- Basic Reset & Theme Variables --- */
+        :root {
+            --bg-color: #f0f2f5;
+            --panel-bg-color: #ffffff;
+            --toolbar-bg-color: #ffffff;
+            --border-color: #d1d5db;
+            --text-color: #111827;
+            --text-color-light: #6b7280;
+            --accent-color: #3b82f6;
+            --shadow-color: rgba(0, 0, 0, 0.1);
+        }
+
+        body.dark {
+            --bg-color: #111827;
+            --panel-bg-color: #1f2937;
+            --toolbar-bg-color: #1f2937;
+            --border-color: #374151;
+            --text-color: #f9fafb;
+            --text-color-light: #9ca3af;
+            --accent-color: #60a5fa;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* --- Main Layout --- */
+        #app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        #top-toolbar {
+            height: 50px;
+            background-color: var(--toolbar-bg-color);
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: 0 2px 4px var(--shadow-color);
+            z-index: 10;
+            padding: 0 1rem;
+            display: flex;
+            align-items: center;
+        }
+
+        #main-content {
+            display: flex;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+
+        #left-toolbox {
+            width: 240px;
+            background-color: var(--panel-bg-color);
+            border-right: 1px solid var(--border-color);
+            padding: 1rem;
+            transition: width 0.2s ease;
+        }
+
+        #main-canvas-container {
+            flex-grow: 1;
+            position: relative;
+        }
+
+        #main-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            background-image:
+                linear-gradient(rgba(0, 0, 0, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 0, 0, 0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+            overflow: hidden;
+        }
+
+        #svg-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none; /* Allows clicks to pass through to the canvas */
+        }
+
+        #right-panels {
+            width: 300px;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--panel-bg-color);
+            border-left: 1px solid var(--border-color);
+        }
+
+        #properties-panel, #test-panel {
+            flex-grow: 1;
+            padding: 1rem;
+            overflow-y: auto;
+        }
+
+        #properties-panel {
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        #workflow-log {
+            height: 150px;
+            background-color: var(--panel-bg-color);
+            border-top: 1px solid var(--border-color);
+            padding: 0.5rem 1rem;
+            overflow-y: scroll;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.875rem;
+            color: var(--text-color-light);
+        }
+
+        /* --- UI Components --- */
+        #minimap {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 150px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 8px var(--shadow-color);
+            z-index: 20;
+            pointer-events: none; /* Allow clicks to pass through */
+        }
+
+        #log-indicator {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 10px;
+            height: 10px;
+            background-color: #22c55e; /* Green */
+            border-radius: 50%;
+            z-index: 30;
+            display: none; /* Hidden by default */
+        }
+
+        #log-indicator.blink {
+            display: block;
+            animation: blink-animation 0.5s ease;
+        }
+
+        @keyframes blink-animation {
+            0% { opacity: 1; }
+            50% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+
+        /* --- Node Specific Styles --- */
+        .node {
+            padding: 10px 15px;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-bottom: 10px;
+            cursor: grab;
+            text-align: center;
+            user-select: none;
+        }
+
+        .canvas-node {
+            position: absolute;
+            background-color: var(--panel-bg-color);
+            border: 1px solid var(--accent-color);
+            box-shadow: 0 2px 5px var(--shadow-color);
+            z-index: 5;
+            cursor: move; /* Change cursor for draggable nodes */
+        }
+
+        .canvas-node.selected {
+            border-color: #f59e0b; /* Amber color for selection */
+            box-shadow: 0 0 15px rgba(245, 158, 11, 0.5);
+        }
+
+        #svg-layer path {
+            stroke: var(--accent-color);
+            stroke-width: 2px;
+            fill: none;
+        }
+
+        #top-toolbar button {
+            background: none;
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 5px 10px;
+            border-radius: 5px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        #top-toolbar button:hover {
+            background-color: var(--bg-color);
+        }
+
+        #zoom-level {
+            font-size: 0.9rem;
+            color: var(--text-color-light);
+        }
+
+        .separator {
+            width: 1px;
+            height: 25px;
+            background-color: var(--border-color);
+            margin: 0 10px;
+        }
+
+        /* --- Right Panel Styles --- */
+        .panel {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid var(--border-color);
+            background-color: var(--toolbar-bg-color);
+        }
+
+        .panel-header h3 {
+            margin: 0;
+            font-size: 1rem;
+        }
+
+        .btn-close-panel {
+            background: none;
+            border: none;
+            font-size: 1rem;
+            cursor: pointer;
+            color: var(--text-color-light);
+        }
+
+        .panel-content {
+            padding: 1rem;
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+
+        .panel-content label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .panel-content input, .panel-content textarea {
+            width: 100%;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin-bottom: 10px;
+        }
+
+        .panel-content button {
+             width: 100%;
+             padding: 8px;
+             border: none;
+             border-radius: 4px;
+             background-color: var(--accent-color);
+             color: white;
+             cursor: pointer;
+        }
+
+        #test-response {
+            margin-top: 1rem;
+            background-color: var(--bg-color);
+            padding: 10px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .resize-handle {
+            width: 5px;
+            cursor: col-resize;
+            background-color: var(--bg-color);
+            z-index: 9;
+        }
+
+        .resize-handle:hover {
+            background-color: var(--accent-color);
+        }
+
+        .minimap-node {
+            position: absolute;
+            background-color: var(--accent-color);
+            opacity: 0.6;
+        }
+
+        .minimap-viewport {
+            position: absolute;
+            border: 1px solid red;
+            z-index: 1;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="app-container">
+        <!-- Floating Log Indicator -->
+        <div id="log-indicator"></div>
+
+        <!-- Top Toolbar -->
+        <header id="top-toolbar">
+            <button id="btn-load">Load</button>
+            <button id="btn-save">Save</button>
+            <button id="btn-run">Run</button>
+            <button id="btn-test-toggle">Test</button>
+            <div class="separator"></div>
+            <button id="btn-zoom-in">+</button>
+            <button id="btn-zoom-out">-</button>
+            <button id="btn-zoom-reset">Reset</button>
+            <span id="zoom-level">100%</span>
+            <div class="separator"></div>
+            <button id="btn-theme-toggle">Theme</button>
+        </header>
+
+        <div id="main-content">
+            <!-- Left Toolbox -->
+            <aside id="left-toolbox">
+                <h2>Nodes</h2>
+                <div class="node" draggable="true" data-node-type="Start">Start</div>
+                <div class="node" draggable="true" data-node-type="End">End</div>
+                <div class="node" draggable="true" data-node-type="AI Agent">AI Agent</div>
+                <div class="node" draggable="true" data-node-type="Function">Function</div>
+                <div class="node" draggable="true" data-node-type="Merge">Merge</div>
+                <div class="node" draggable="true" data-node-type="Email">Email</div>
+                <div class="node" draggable="true" data-node-type="Slack">Slack</div>
+            </aside>
+
+            <div class="resize-handle" id="left-resize-handle"></div>
+
+            <!-- Main Workflow Canvas -->
+            <main id="main-canvas-container">
+                <div id="main-canvas">
+                    <svg id="svg-layer" width="100%" height="100%"></svg>
+                    <!-- Dropped nodes will be added here -->
+                </div>
+                <!-- Minimap -->
+                <div id="minimap"></div>
+            </main>
+
+            <div class="resize-handle" id="right-resize-handle"></div>
+
+            <!-- Right Panels -->
+            <aside id="right-panels">
+                <!-- Properties Panel -->
+                <div id="properties-panel" class="panel">
+                    <div class="panel-header">
+                        <h3>Properties</h3>
+                        <button class="btn-close-panel" data-panel="properties-panel">X</button>
+                    </div>
+                    <div class="panel-content">
+                        <p>Select a node to see its properties.</p>
+                    </div>
+                </div>
+                <!-- Manual Test Panel -->
+                <div id="test-panel" class="panel" style="display: none;">
+                    <div class="panel-header">
+                        <h3>Manual Test</h3>
+                        <button class="btn-close-panel" data-panel="test-panel">X</button>
+                    </div>
+                    <div class="panel-content">
+                        <label for="test-api-url">API Endpoint:</label>
+                        <input type="text" id="test-api-url" value="/api/workflows/execute" />
+                        <button id="btn-send-test">Send</button>
+                        <pre id="test-response"></pre>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <!-- Bottom Log Area -->
+        <footer id="workflow-log">
+            <!-- Log messages will appear here -->
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvasContainer = document.getElementById('main-canvas-container');
+            const canvas = document.getElementById('main-canvas');
+            const svgLayer = document.getElementById('svg-layer');
+            const zoomLevelDisplay = document.getElementById('zoom-level');
+
+            let scale = 1;
+            let panX = 0;
+            let panY = 0;
+            let isPanning = false;
+            let lastPanX, lastPanY;
+
+            let draggedNode = null;
+            let nodeIdCounter = 0;
+            let selectedNode = null;
+            const connections = [];
+
+            // --- Zoom and Pan ---
+            function applyTransform() {
+                canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+            }
+
+            function updateZoomLevelDisplay() {
+                zoomLevelDisplay.textContent = `${Math.round(scale * 100)}%`;
+            }
+
+            canvasContainer.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const zoomIntensity = 0.1;
+                const delta = e.deltaY > 0 ? -zoomIntensity : zoomIntensity;
+                const newScale = Math.max(0.2, Math.min(3, scale + delta));
+
+                const containerRect = canvasContainer.getBoundingClientRect();
+                const mouseX = e.clientX - containerRect.left;
+                const mouseY = e.clientY - containerRect.top;
+
+                panX = mouseX - (mouseX - panX) * (newScale / scale);
+                panY = mouseY - (mouseY - panY) * (newScale / scale);
+                scale = newScale;
+
+                applyTransform();
+                updateZoomLevelDisplay();
+            });
+
+            canvasContainer.addEventListener('mousedown', (e) => {
+                if (e.button === 1) { // Middle mouse button for panning
+                    isPanning = true;
+                    lastPanX = e.clientX;
+                    lastPanY = e.clientY;
+                    canvasContainer.style.cursor = 'grabbing';
+                }
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (isPanning) {
+                    const dx = e.clientX - lastPanX;
+                    const dy = e.clientY - lastPanY;
+                    panX += dx;
+                    panY += dy;
+                    lastPanX = e.clientX;
+                    lastPanY = e.clientY;
+                    applyTransform();
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isPanning) {
+                    isPanning = false;
+                    canvasContainer.style.cursor = 'default';
+                }
+            });
+
+            document.getElementById('btn-zoom-in').addEventListener('click', () => zoom(0.2));
+            document.getElementById('btn-zoom-out').addEventListener('click', () => zoom(-0.2));
+            document.getElementById('btn-zoom-reset').addEventListener('click', () => {
+                scale = 1; panX = 0; panY = 0;
+                applyTransform();
+                updateZoomLevelDisplay();
+            });
+
+            function zoom(delta) {
+                const newScale = Math.max(0.2, Math.min(3, scale + delta));
+                const containerRect = canvasContainer.getBoundingClientRect();
+                const centerX = containerRect.width / 2;
+                const centerY = containerRect.height / 2;
+                panX = centerX - (centerX - panX) * (newScale / scale);
+                panY = centerY - (centerY - panY) * (newScale / scale);
+                scale = newScale;
+                applyTransform();
+                updateZoomLevelDisplay();
+            }
+
+            // --- Drag from Toolbox ---
+            document.querySelectorAll('#left-toolbox .node').forEach(node => {
+                node.addEventListener('dragstart', (e) => e.dataTransfer.setData('text/plain', e.target.dataset.nodeType));
+            });
+
+            canvasContainer.addEventListener('dragover', (e) => e.preventDefault());
+
+            canvasContainer.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const nodeType = e.dataTransfer.getData('text/plain');
+                if (!nodeType) return;
+
+                const containerRect = canvasContainer.getBoundingClientRect();
+                const dropX = (e.clientX - containerRect.left - panX) / scale;
+                const dropY = (e.clientY - containerRect.top - panY) / scale;
+
+                createNodeOnCanvas(nodeType, dropX, dropY);
+            });
+
+            function createNodeOnCanvas(type, x, y) {
+                const nodeEl = document.createElement('div');
+                nodeEl.id = `node-${nodeIdCounter++}`;
+                nodeEl.className = 'node canvas-node';
+                nodeEl.textContent = type;
+                nodeEl.style.left = `${x - 75}px`;
+                nodeEl.style.top = `${y - 20}px`;
+
+                makeNodeDraggable(nodeEl);
+                addConnectionHandlers(nodeEl);
+                canvas.appendChild(nodeEl);
+            }
+
+            // --- Dragging Nodes on Canvas ---
+            function makeNodeDraggable(element) {
+                element.addEventListener('mousedown', (e) => {
+                    if (e.button !== 0 || e.shiftKey) return;
+                    e.preventDefault();
+                    draggedNode = element;
+                    document.addEventListener('mousemove', onNodeMouseMove);
+                    document.addEventListener('mouseup', onNodeMouseUp);
+                });
+            }
+
+            function onNodeMouseMove(e) {
+                if (!draggedNode) return;
+                draggedNode.style.left = `${draggedNode.offsetLeft + e.movementX / scale}px`;
+                draggedNode.style.top = `${draggedNode.offsetTop + e.movementY / scale}px`;
+                updateConnections(draggedNode);
+            }
+
+            function onNodeMouseUp() {
+                draggedNode = null;
+                document.removeEventListener('mousemove', onNodeMouseMove);
+                document.removeEventListener('mouseup', onNodeMouseUp);
+            }
+
+            // --- SVG Connection Logic ---
+            function addConnectionHandlers(node) {
+                node.addEventListener('click', (e) => {
+                    if (e.shiftKey) handleNodeSelection(node);
+                });
+            }
+
+            function handleNodeSelection(node) {
+                if (!selectedNode) {
+                    selectedNode = node;
+                    selectedNode.classList.add('selected');
+                } else {
+                    if (selectedNode !== node) createConnection(selectedNode, node);
+                    selectedNode.classList.remove('selected');
+                    selectedNode = null;
+                }
+            }
+
+            function createConnection(nodeA, nodeB) {
+                const connId = `${nodeA.id}-${nodeB.id}`;
+                if (document.getElementById(connId)) return; // Avoid duplicate connections
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('id', connId);
+                svgLayer.appendChild(path);
+                const connection = { id: connId, from: nodeA, to: nodeB, path: path };
+                connections.push(connection);
+                drawConnection(connection);
+            }
+
+            function drawConnection({ from, to, path }) {
+                const startX = from.offsetLeft + from.offsetWidth / 2;
+                const startY = from.offsetTop + from.offsetHeight / 2;
+                const endX = to.offsetLeft + to.offsetWidth / 2;
+                const endY = to.offsetTop + to.offsetHeight / 2;
+                const d = `M ${startX} ${startY} C ${startX + 50} ${startY}, ${endX - 50} ${endY}, ${endX} ${endY}`;
+                path.setAttribute('d', d);
+            }
+
+            function updateConnections(node) {
+                connections.forEach(conn => {
+                    if (conn.from === node || conn.to === node) drawConnection(conn);
+                });
+            }
+
+            // --- Panel Logic ---
+            const propertiesPanel = document.getElementById('properties-panel');
+            const testPanel = document.getElementById('test-panel');
+            let propertySelectedNode = null;
+
+            function updatePropertiesPanel(node) {
+                const content = propertiesPanel.querySelector('.panel-content');
+                if (node) {
+                    content.innerHTML = `
+                        <div><label>Node ID:</label><span>${node.id}</span></div>
+                        <div><label>Type:</label><span>${node.textContent}</span></div>
+                        <label>Parameters:</label>
+                        <textarea rows="5"></textarea>
+                    `;
+                } else {
+                    content.innerHTML = '<p>Select a node to see its properties.</p>';
+                }
+            }
+
+            canvas.addEventListener('click', (e) => {
+                if (e.target.classList.contains('canvas-node')) {
+                    const node = e.target;
+                    // Deselect previous node if there was one
+                    if(propertySelectedNode) {
+                        propertySelectedNode.classList.remove('selected');
+                    }
+                    // Select the new node
+                    propertySelectedNode = node;
+                    propertySelectedNode.classList.add('selected');
+                    updatePropertiesPanel(node);
+                }
+            });
+
+            document.querySelectorAll('.btn-close-panel').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.getElementById(e.target.dataset.panel).style.display = 'none';
+                });
+            });
+
+            document.getElementById('btn-test-toggle').addEventListener('click', () => {
+                testPanel.style.display = testPanel.style.display === 'none' ? 'flex' : 'none';
+            });
+
+            // --- Theme Toggle ---
+            document.getElementById('btn-theme-toggle').addEventListener('click', () => {
+                document.body.classList.toggle('dark');
+            });
+
+            // --- Log-Driven Automation ---
+            const workflowLog = document.getElementById('workflow-log');
+
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach(mutation => {
+                    mutation.addedNodes.forEach(node => {
+                        if (node.nodeType === Node.TEXT_NODE) {
+                            const logText = node.textContent;
+                            // Check for connection creation logs
+                            const match = logText.match(/Connection created: (node-\d+) -> (node-\d+)/);
+                            if (match) {
+                                const fromNode = document.getElementById(match[1]);
+                                const toNode = document.getElementById(match[2]);
+                                if (fromNode && toNode) {
+                                    createConnection(fromNode, toNode);
+                                }
+                            }
+                        }
+                    });
+                });
+            });
+
+            observer.observe(workflowLog, { childList: true, subtree: true });
+
+            // --- Temporary Test Function ---
+            function addLog(message) {
+                const logEntry = document.createTextNode(message + '\n');
+                workflowLog.appendChild(logEntry);
+            }
+            // Example of how to trigger it:
+            // setTimeout(() => addLog("Connection created: node-0 -> node-1"), 2000);
+
+            // --- Resizable Panels ---
+            function makeResizable(handle, panel) {
+                let isResizing = false;
+                handle.addEventListener('mousedown', (e) => {
+                    isResizing = true;
+                    document.addEventListener('mousemove', onResizeMove);
+                    document.addEventListener('mouseup', onResizeUp);
+                });
+
+                function onResizeMove(e) {
+                    if (!isResizing) return;
+                    const newWidth = (panel.id === 'left-toolbox') ? e.clientX : window.innerWidth - e.clientX;
+                    panel.style.width = `${newWidth}px`;
+                }
+
+                function onResizeUp() {
+                    isResizing = false;
+                    document.removeEventListener('mousemove', onResizeMove);
+                    document.removeEventListener('mouseup', onResizeUp);
+                }
+            }
+
+            makeResizable(document.getElementById('left-resize-handle'), document.getElementById('left-toolbox'));
+            makeResizable(document.getElementById('right-resize-handle'), document.getElementById('right-panels'));
+
+            // --- Minimap Logic ---
+            const minimap = document.getElementById('minimap');
+            const minimapViewport = document.createElement('div');
+            minimapViewport.className = 'minimap-viewport';
+            minimap.appendChild(minimapViewport);
+
+            function updateMinimap() {
+                // Clear previous nodes
+                Array.from(minimap.getElementsByClassName('minimap-node')).forEach(node => node.remove());
+
+                const canvasNodes = canvas.querySelectorAll('.canvas-node');
+                const canvasRect = canvas.getBoundingClientRect();
+                const minimapRect = minimap.getBoundingClientRect();
+
+                // Find bounds of all nodes
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                if(canvasNodes.length === 0) return;
+
+                canvasNodes.forEach(node => {
+                    minX = Math.min(minX, node.offsetLeft);
+                    minY = Math.min(minY, node.offsetTop);
+                    maxX = Math.max(maxX, node.offsetLeft + node.offsetWidth);
+                    maxY = Math.max(maxY, node.offsetTop + node.offsetHeight);
+                });
+
+                const contentWidth = maxX - minX;
+                const contentHeight = maxY - minY;
+
+                if(contentWidth === 0 || contentHeight === 0) return;
+
+                const scaleX = minimapRect.width / contentWidth;
+                const scaleY = minimapRect.height / contentHeight;
+                const mapScale = Math.min(scaleX, scaleY) * 0.9; // Add some padding
+
+                canvasNodes.forEach(node => {
+                    const minimapNode = document.createElement('div');
+                    minimapNode.className = 'minimap-node';
+                    minimapNode.style.left = `${(node.offsetLeft - minX) * mapScale}px`;
+                    minimapNode.style.top = `${(node.offsetTop - minY) * mapScale}px`;
+                    minimapNode.style.width = `${node.offsetWidth * mapScale}px`;
+                    minimapNode.style.height = `${node.offsetHeight * mapScale}px`;
+                    minimap.appendChild(minimapNode);
+                });
+
+                // Update viewport position and size
+                const viewRect = canvasContainer.getBoundingClientRect();
+                minimapViewport.style.left = `${((viewRect.left - canvasRect.left) / scale - minX) * mapScale}px`;
+                minimapViewport.style.top = `${((viewRect.top - canvasRect.top) / scale - minY) * mapScale}px`;
+                minimapViewport.style.width = `${viewRect.width / scale * mapScale}px`;
+                minimapViewport.style.height = `${viewRect.height / scale * mapScale}px`;
+            }
+
+            // Initial and subsequent updates
+            setInterval(updateMinimap, 1000); // Periodically update minimap
+        });
+    </script>
+</body>
+</html>
